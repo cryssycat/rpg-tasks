@@ -134,6 +134,17 @@
   .badge.rewards{ background:var(--violet-pale); color:var(--violet-deep); }
   .badge.coins{ background:#FFF3D6; color:var(--gold-deep); }
   .badge.freq{ background:#E1F3EE; color:var(--mint-deep); }
+  .badge.cat-Health{ background:#E3F2E6; color:#2E7D4F; }
+  .badge.cat-Home{ background:#E3EEFB; color:#2F5FA0; }
+  .badge.cat-Work{ background:#FFE9D6; color:#B15412; }
+  .badge.cat-Mental{ background:#F1E6FB; color:#6B3FA0; }
+
+  .filter-bar{ display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap; }
+  .filter-chip{
+    font-size:12.5px; font-weight:700; padding:6px 12px; border-radius:20px;
+    border:1.5px solid var(--border); background:#fff; color:var(--ink-soft); cursor:pointer;
+  }
+  .filter-chip.active{ background:var(--violet-pale); border-color:var(--violet); color:var(--violet-deep); }
 
   .quest-actions{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
   .btn{
@@ -245,6 +256,7 @@
     <button class="tab-btn" data-tab="completed">✅ Completed</button>
   </div>
 
+  <div id="filter-bar" class="filter-bar"></div>
   <div id="content" class="loading">Loading your quest log…</div>
 </div>
 
@@ -269,13 +281,31 @@
       </select>
     </div>
     <div class="field" id="f-diff-wrap">
-      <label id="f-diff-label">Difficulty</label>
+      <label>Difficulty</label>
       <select id="f-difficulty">
         <option value="Trivial">Trivial</option>
         <option value="Easy" selected>Easy</option>
         <option value="Medium">Medium</option>
         <option value="Hard">Hard</option>
         <option value="Epic">Epic</option>
+      </select>
+    </div>
+    <div class="field" id="f-severity-wrap" style="display:none;">
+      <label>Severity</label>
+      <select id="f-severity">
+        <option value="Minor">Minor (-10 EXP)</option>
+        <option value="Moderate" selected>Moderate (-25 EXP)</option>
+        <option value="Severe">Severe (-50 EXP)</option>
+      </select>
+    </div>
+    <div class="field" id="f-category-wrap">
+      <label>Category</label>
+      <select id="f-category">
+        <option value="None" selected>None</option>
+        <option value="Health">Health</option>
+        <option value="Home">Home</option>
+        <option value="Work">Work</option>
+        <option value="Mental">Mental</option>
       </select>
     </div>
     <div class="field" id="f-recur-wrap">
@@ -315,6 +345,8 @@ const WORKER_URL = "https://gamify.crysthigpen.workers.dev";
 
 let state = { player: null, tasks: [], shop: [] };
 let activeTab = "quests";
+let categoryFilter = "All";
+const CATEGORY_LIST = ["All", "Health", "Home", "Work", "Mental"];
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -363,8 +395,9 @@ function badge(cls, text) { return `<span class="badge ${cls}">${text}</span>`; 
 
 function renderQuestCard(t) {
   const diffBadge = t.difficulty ? badge(`diff-${t.difficulty}`, t.difficulty) : "";
+  const catBadge = (t.category && t.category !== "None") ? badge(`cat-${t.category}`, t.category) : "";
   const recurs = t.recurrence && t.recurrence !== "None";
-  let extraBadges = recurs ? badge("freq", `↻ ${t.recurrence}`) : "";
+  let extraBadges = catBadge + (recurs ? badge("freq", `↻ ${t.recurrence}`) : "");
   let bodyExtra = "";
   let actions = "";
 
@@ -429,6 +462,7 @@ function renderBossCard(boss, subtasks) {
           <div class="quest-name">🐉 ${escapeHtml(boss.name)}</div>
           <div class="quest-meta">
             ${boss.difficulty ? badge(`diff-${boss.difficulty}`, boss.difficulty) : ""}
+            ${(boss.category && boss.category !== "None") ? badge(`cat-${boss.category}`, boss.category) : ""}
             ${recurs ? badge("freq", `↻ ${boss.recurrence}`) : ""}
             ${badge("rewards", `+${boss.exp} EXP`)}
             ${badge("coins", `+${boss.coins} 🪙`)}
@@ -465,21 +499,42 @@ function escapeHtml(str) {
   return d.innerHTML;
 }
 
+function renderFilterBar() {
+  const bar = $("#filter-bar");
+  if (activeTab !== "quests" && activeTab !== "bosses") {
+    bar.innerHTML = "";
+    return;
+  }
+  bar.innerHTML = CATEGORY_LIST.map(c =>
+    `<button class="filter-chip ${categoryFilter === c ? 'active' : ''}" onclick="setCategoryFilter('${c}')">${c}</button>`
+  ).join("");
+}
+
+window.setCategoryFilter = (c) => {
+  categoryFilter = c;
+  render();
+};
+
+function matchesFilter(t) {
+  return categoryFilter === "All" || t.category === categoryFilter;
+}
+
 function render() {
+  renderFilterBar();
   const content = $("#content");
   const activeTasks = state.tasks.filter(t => t.status === "Active");
 
   if (activeTab === "quests") {
-    const quests = activeTasks.filter(t => !["Boss", "Boss Subtask"].includes(t.taskType));
+    const quests = activeTasks.filter(t => !["Boss", "Boss Subtask"].includes(t.taskType) && matchesFilter(t));
     content.innerHTML = quests.length
       ? `<div class="card-list">${quests.map(renderQuestCard).join("")}</div>`
-      : `<div class="empty-state"><span class="glyph">🗺️</span>No active quests. Tap + to start one!</div>`;
+      : `<div class="empty-state"><span class="glyph">🗺️</span>No active quests${categoryFilter !== 'All' ? ` in ${categoryFilter}` : ''}. Tap + to start one!</div>`;
   }
 
   if (activeTab === "bosses") {
-    const bosses = activeTasks.filter(t => t.taskType === "Boss");
+    const bosses = activeTasks.filter(t => t.taskType === "Boss" && matchesFilter(t));
     if (!bosses.length) {
-      content.innerHTML = `<div class="empty-state"><span class="glyph">🐉</span>No bosses summoned yet.</div>`;
+      content.innerHTML = `<div class="empty-state"><span class="glyph">🐉</span>No bosses${categoryFilter !== 'All' ? ` in ${categoryFilter}` : ''} summoned yet.</div>`;
     } else {
       content.innerHTML = `<div class="card-list">${bosses.map(b => {
         const subs = state.tasks.filter(t => t.taskType === "Boss Subtask" && t.bossParentIds.includes(b.id));
@@ -590,8 +645,9 @@ $$(".tab-btn").forEach(btn => {
 
 function updateModalFields() {
   const type = $("#f-type").value;
-  $("#f-diff-wrap").style.display = (type === "Boss Subtask") ? "none" : "block";
-  $("#f-diff-label").textContent = type === "Penalty" ? "Severity (Trivial=Minor, Easy=Moderate, Hard=Severe)" : "Difficulty";
+  $("#f-diff-wrap").style.display = (type === "Boss Subtask" || type === "Penalty") ? "none" : "block";
+  $("#f-severity-wrap").style.display = (type === "Penalty") ? "block" : "none";
+  $("#f-category-wrap").style.display = (type === "Boss Subtask") ? "none" : "block";
   // Recurrence applies to Standard, Count, and Boss quests. Penalties are logged
   // on the spot (no cooldown), and Boss Subtasks are controlled by their parent Boss.
   $("#f-recur-wrap").style.display = (type === "Penalty" || type === "Boss Subtask") ? "none" : "block";
@@ -618,14 +674,12 @@ $("#modal-save").addEventListener("click", async () => {
   const taskType = $("#f-type").value;
   if (!name) { toast("Name your quest first", "loss"); return; }
 
-  // Map difficulty selector to penalty severity when type is Penalty
-  const diffToSeverity = { Trivial: "Minor", Easy: "Moderate", Medium: "Moderate", Hard: "Severe", Epic: "Severe" };
-  const difficulty = taskType === "Penalty" ? diffToSeverity[$("#f-difficulty").value] : $("#f-difficulty").value;
-
   const payload = {
     name,
     taskType,
-    difficulty: taskType === "Boss Subtask" ? null : difficulty,
+    difficulty: (taskType === "Boss Subtask" || taskType === "Penalty") ? null : $("#f-difficulty").value,
+    severity: taskType === "Penalty" ? $("#f-severity").value : null,
+    category: taskType === "Boss Subtask" ? "None" : $("#f-category").value,
     recurrence: (taskType === "Penalty" || taskType === "Boss Subtask") ? "None" : $("#f-recurrence").value,
     countTarget: taskType === "Count" ? parseInt($("#f-count-target").value, 10) : null,
     bossParentId: taskType === "Boss Subtask" ? $("#f-boss-parent").value : null,
