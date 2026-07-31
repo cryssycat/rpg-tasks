@@ -261,8 +261,7 @@
     <div class="field">
       <label>Quest Type</label>
       <select id="f-type">
-        <option value="Standard">Standard (one-time)</option>
-        <option value="Recurring">Recurring (daily/weekly/monthly)</option>
+        <option value="Standard">Standard</option>
         <option value="Count">Count (repeat N times)</option>
         <option value="Penalty">Penalty (deducts EXP)</option>
         <option value="Boss">Boss (needs subtasks)</option>
@@ -279,9 +278,10 @@
         <option value="Epic">Epic</option>
       </select>
     </div>
-    <div class="field" id="f-freq-wrap" style="display:none;">
-      <label>Frequency</label>
-      <select id="f-frequency">
+    <div class="field" id="f-recur-wrap">
+      <label>Recurs</label>
+      <select id="f-recurrence">
+        <option value="None" selected>Doesn't recur (one-time)</option>
         <option value="Daily">Daily</option>
         <option value="Weekly">Weekly</option>
         <option value="Monthly">Monthly</option>
@@ -363,27 +363,27 @@ function badge(cls, text) { return `<span class="badge ${cls}">${text}</span>`; 
 
 function renderQuestCard(t) {
   const diffBadge = t.difficulty ? badge(`diff-${t.difficulty}`, t.difficulty) : "";
-  let extraBadges = "";
+  const recurs = t.recurrence && t.recurrence !== "None";
+  let extraBadges = recurs ? badge("freq", `↻ ${t.recurrence}`) : "";
   let bodyExtra = "";
   let actions = "";
 
-  if (t.taskType === "Recurring") {
-    extraBadges += badge("freq", t.frequency || "");
-    actions = t.available
-      ? `<button class="btn btn-primary" onclick="completeTask('${t.id}')">Complete</button>`
-      : `<button class="btn btn-ghost" disabled>Already done — resets ${t.frequency?.toLowerCase()}</button>`;
-  } else if (t.taskType === "Count") {
+  if (t.taskType === "Count") {
     const pct = Math.round((t.countProgress / t.countTarget) * 100);
     bodyExtra = `
       <div class="count-track">
         <div class="count-bar"><div class="count-fill" style="width:${pct}%"></div></div>
         <span class="mono" style="font-size:12px;">${t.countProgress}/${t.countTarget}</span>
       </div>`;
-    actions = `<button class="btn btn-primary" onclick="incrementTask('${t.id}')">+1</button>`;
+    actions = t.available
+      ? `<button class="btn btn-primary" onclick="incrementTask('${t.id}')">+1</button>`
+      : `<button class="btn btn-ghost" disabled>On cooldown — resets ${t.recurrence.toLowerCase()}</button>`;
   } else if (t.taskType === "Penalty") {
     actions = `<button class="btn btn-danger" onclick="logPenalty('${t.id}')">Log Slip-up</button>`;
   } else {
-    actions = `<button class="btn btn-primary" onclick="completeTask('${t.id}')">Complete</button>`;
+    actions = t.available
+      ? `<button class="btn btn-primary" onclick="completeTask('${t.id}')">Complete</button>`
+      : `<button class="btn btn-ghost" disabled>Already done — resets ${t.recurrence.toLowerCase()}</button>`;
   }
 
   actions += `<button class="btn btn-ghost" onclick="archiveTask('${t.id}')">✕</button>`;
@@ -393,7 +393,7 @@ function renderQuestCard(t) {
     : badge("rewards", `+${t.exp} EXP`) + (t.coins ? badge("coins", `+${t.coins} 🪙`) : "");
 
   return `
-    <div class="quest-card type-${t.taskType} ${t.available === false ? 'unavailable' : ''}">
+    <div class="quest-card type-${t.taskType} ${(recurs && t.taskType === 'Standard') ? 'type-Recurring' : ''} ${t.available === false ? 'unavailable' : ''}">
       <div class="quest-top">
         <div>
           <div class="quest-name">${escapeHtml(t.name)}</div>
@@ -410,11 +410,17 @@ function renderBossCard(boss, subtasks) {
   const done = subtasks.filter(s => s.status === "Completed").length;
   const total = subtasks.length;
   const allDone = total > 0 && done === total;
+  const recurs = boss.recurrence && boss.recurrence !== "None";
+  const canDefeat = allDone && boss.available !== false;
   const subHtml = subtasks.map(s => `
     <li class="sub-item ${s.status === 'Completed' ? 'done' : ''}">
       <span class="sub-check ${s.status === 'Completed' ? 'checked' : ''}" onclick="${s.status === 'Completed' ? '' : `completeSubtask('${s.id}')`}">${s.status === 'Completed' ? '✓' : ''}</span>
       ${escapeHtml(s.name)}
     </li>`).join("");
+
+  const defeatLabel = !allDone
+    ? "⚔️ Defeat Boss"
+    : (canDefeat ? "⚔️ Defeat Boss" : `On cooldown — resets ${boss.recurrence.toLowerCase()}`);
 
   return `
     <div class="quest-card type-Boss">
@@ -423,6 +429,7 @@ function renderBossCard(boss, subtasks) {
           <div class="quest-name">🐉 ${escapeHtml(boss.name)}</div>
           <div class="quest-meta">
             ${boss.difficulty ? badge(`diff-${boss.difficulty}`, boss.difficulty) : ""}
+            ${recurs ? badge("freq", `↻ ${boss.recurrence}`) : ""}
             ${badge("rewards", `+${boss.exp} EXP`)}
             ${badge("coins", `+${boss.coins} 🪙`)}
           </div>
@@ -431,7 +438,7 @@ function renderBossCard(boss, subtasks) {
       <div style="font-size:12px;color:var(--ink-soft);">${done}/${total} subtasks defeated</div>
       <ul class="sub-list">${subHtml || '<span style="font-size:13px;color:var(--ink-soft);">No subtasks yet — add some from the + button.</span>'}</ul>
       <div class="quest-actions">
-        <button class="btn btn-gold" ${allDone ? "" : "disabled"} onclick="defeatBoss('${boss.id}')">⚔️ Defeat Boss</button>
+        <button class="btn btn-gold" ${canDefeat ? "" : "disabled"} onclick="defeatBoss('${boss.id}')">${defeatLabel}</button>
         <button class="btn btn-ghost" onclick="archiveTask('${boss.id}')">✕</button>
       </div>
     </div>`;
@@ -585,7 +592,9 @@ function updateModalFields() {
   const type = $("#f-type").value;
   $("#f-diff-wrap").style.display = (type === "Boss Subtask") ? "none" : "block";
   $("#f-diff-label").textContent = type === "Penalty" ? "Severity (Trivial=Minor, Easy=Moderate, Hard=Severe)" : "Difficulty";
-  $("#f-freq-wrap").style.display = (type === "Recurring") ? "block" : "none";
+  // Recurrence applies to Standard, Count, and Boss quests. Penalties are logged
+  // on the spot (no cooldown), and Boss Subtasks are controlled by their parent Boss.
+  $("#f-recur-wrap").style.display = (type === "Penalty" || type === "Boss Subtask") ? "none" : "block";
   $("#f-count-wrap").style.display = (type === "Count") ? "block" : "none";
   $("#f-boss-wrap").style.display = (type === "Boss Subtask") ? "block" : "none";
 
@@ -617,7 +626,7 @@ $("#modal-save").addEventListener("click", async () => {
     name,
     taskType,
     difficulty: taskType === "Boss Subtask" ? null : difficulty,
-    frequency: taskType === "Recurring" ? $("#f-frequency").value : null,
+    recurrence: (taskType === "Penalty" || taskType === "Boss Subtask") ? "None" : $("#f-recurrence").value,
     countTarget: taskType === "Count" ? parseInt($("#f-count-target").value, 10) : null,
     bossParentId: taskType === "Boss Subtask" ? $("#f-boss-parent").value : null,
     notes: $("#f-notes").value.trim(),
