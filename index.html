@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quest Log</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Cinzel:wght@500;700&family=Nunito:wght@400;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-a:#F3EEFB; --bg-b:#FDF4EA;
+    --parchment:#FFFBF3; --parchment-edge:#F1E6D3;
+    --ink:#463B63; --ink-soft:#8378A0;
+    --violet:#A78BFA; --violet-deep:#7C5CFC; --violet-pale:#EDE6FB;
+    --gold:#F4B740; --gold-deep:#DE9A1F;
+    --mint:#8FD9A8; --mint-deep:#4FAE71;
+    --rose:#F2909A; --rose-deep:#DD5F6C;
+    --sky:#8FCBEA;
+    --border:#E1D4F7;
+    --shadow: 0 6px 18px rgba(124,92,252,0.12);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; min-height:100vh;
+    background: linear-gradient(160deg, var(--bg-a) 0%, var(--bg-b) 100%);
+    font-family:'Nunito', sans-serif;
+    color:var(--ink);
+    padding-bottom:90px;
+  }
+  h1,h2,h3{ font-family:'Cinzel', serif; letter-spacing:0.02em; margin:0; }
+  .pixel{ font-family:'Press Start 2P', monospace; }
+  .mono{ font-family:'Space Mono', monospace; }
+
+  /* ---------- layout ---------- */
+  .wrap{ max-width:920px; margin:0 auto; padding:18px 16px 8px; }
+
+  /* ---------- status window (signature element) ---------- */
+  .status-window{
+    position:relative;
+    background: var(--parchment);
+    border:2px solid var(--border);
+    border-radius:18px;
+    box-shadow: var(--shadow);
+    padding:18px 20px;
+    display:flex;
+    align-items:center;
+    gap:18px;
+    overflow:hidden;
+  }
+  .status-window::before, .status-window::after,
+  .status-window .corner-tl, .status-window .corner-br{
+    content:""; position:absolute; width:14px; height:14px;
+    border-color:var(--violet); border-style:solid; opacity:0.55;
+  }
+  .status-window::before{ top:6px; left:6px; border-width:3px 0 0 3px; border-radius:4px 0 0 0;}
+  .status-window::after{ bottom:6px; right:6px; border-width:0 3px 3px 0; border-radius:0 0 4px 0;}
+  .status-window .corner-tl{ top:6px; right:6px; border-width:3px 3px 0 0; border-radius:0 4px 0 0;}
+  .status-window .corner-br{ bottom:6px; left:6px; border-width:0 0 3px 3px; border-radius:0 0 0 4px;}
+
+  .avatar-badge{
+    flex-shrink:0;
+    width:66px; height:66px; border-radius:16px;
+    background: radial-gradient(circle at 30% 25%, #fff, var(--violet-pale) 60%, var(--violet) 140%);
+    border:2px solid var(--violet);
+    display:flex; align-items:center; justify-content:center;
+    font-size:30px;
+  }
+  .status-main{ flex:1; min-width:0; }
+  .status-toprow{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+  .level-pill{
+    font-size:11px; padding:4px 8px; border-radius:8px;
+    background:var(--violet); color:#fff; letter-spacing:0.03em;
+  }
+  .status-title{ font-size:18px; color:var(--ink); }
+  .exp-track{
+    margin-top:8px; height:14px; border-radius:8px;
+    background:var(--violet-pale); border:1.5px solid var(--border);
+    overflow:hidden; position:relative;
+  }
+  .exp-fill{
+    height:100%; background: linear-gradient(90deg, var(--violet), var(--violet-deep));
+    border-radius:8px 0 0 8px; transition: width 0.6s cubic-bezier(.4,1.4,.6,1);
+  }
+  .exp-label{ font-size:11px; color:var(--ink-soft); margin-top:4px; }
+  .coin-badge{
+    flex-shrink:0; display:flex; align-items:center; gap:6px;
+    background: var(--parchment-edge); border:1.5px solid var(--gold);
+    border-radius:12px; padding:8px 12px; font-weight:800; color:var(--gold-deep);
+    font-size:15px;
+  }
+  .coin-badge .coin-icon{ font-size:18px; }
+
+  /* ---------- tabs ---------- */
+  .tabs{
+    display:flex; gap:8px; margin:18px 0 14px; overflow-x:auto;
+    padding-bottom:2px;
+  }
+  .tab-btn{
+    font-family:'Cinzel', serif; font-weight:700; font-size:13.5px;
+    background:transparent; border:2px solid var(--border); color:var(--ink-soft);
+    padding:8px 16px; border-radius:12px; cursor:pointer; white-space:nowrap;
+    transition:all .15s ease;
+  }
+  .tab-btn.active{ background:var(--violet); border-color:var(--violet); color:#fff; }
+  .tab-btn:hover:not(.active){ border-color:var(--violet); color:var(--violet-deep); }
+
+  /* ---------- cards ---------- */
+  .card-list{ display:flex; flex-direction:column; gap:12px; }
+  .quest-card{
+    background:var(--parchment); border:2px solid var(--parchment-edge);
+    border-left:6px solid var(--violet);
+    border-radius:14px; padding:14px 16px; box-shadow:var(--shadow);
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .quest-card.type-Penalty{ border-left-color:var(--rose); }
+  .quest-card.type-Boss{ border-left-color:var(--gold-deep); background:
+     linear-gradient(180deg, #FFF7E6, var(--parchment) 55%); }
+  .quest-card.type-Count{ border-left-color:var(--sky); }
+  .quest-card.type-Recurring{ border-left-color:var(--mint-deep); }
+  .quest-card.unavailable{ opacity:0.55; }
+
+  .quest-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+  .quest-name{ font-weight:800; font-size:16px; }
+  .quest-meta{ display:flex; gap:6px; flex-wrap:wrap; margin-top:3px; }
+  .badge{
+    font-size:10.5px; font-weight:700; padding:3px 8px; border-radius:7px;
+    letter-spacing:0.02em;
+  }
+  .badge.diff-Trivial{ background:#E3F2E6; color:#3E8E56; }
+  .badge.diff-Easy{ background:var(--mint); color:#245C36; }
+  .badge.diff-Medium{ background:#FFF0C2; color:#8A6A0A; }
+  .badge.diff-Hard{ background:#FFDCC2; color:#B15412; }
+  .badge.diff-Epic{ background:#FBD7E4; color:#9A2E58; }
+  .badge.rewards{ background:var(--violet-pale); color:var(--violet-deep); }
+  .badge.coins{ background:#FFF3D6; color:var(--gold-deep); }
+  .badge.freq{ background:#E1F3EE; color:var(--mint-deep); }
+
+  .quest-actions{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .btn{
+    font-family:'Nunito', sans-serif; font-weight:800; font-size:13.5px;
+    border:none; border-radius:10px; padding:9px 16px; cursor:pointer;
+    transition:transform .1s ease, box-shadow .1s ease;
+  }
+  .btn:active{ transform: translateY(1px) scale(0.98); }
+  .btn:disabled{ opacity:0.45; cursor:not-allowed; }
+  .btn-primary{ background:var(--violet); color:#fff; }
+  .btn-primary:hover:not(:disabled){ background:var(--violet-deep); }
+  .btn-danger{ background:var(--rose); color:#fff; }
+  .btn-danger:hover:not(:disabled){ background:var(--rose-deep); }
+  .btn-ghost{ background:transparent; border:1.5px solid var(--border); color:var(--ink-soft); }
+  .btn-gold{ background:var(--gold); color:#5A3E05; }
+  .btn-gold:hover:not(:disabled){ background:var(--gold-deep); color:#fff; }
+
+  .count-track{
+    display:flex; align-items:center; gap:8px;
+  }
+  .count-bar{ flex:1; height:10px; background:var(--violet-pale); border-radius:6px; overflow:hidden; }
+  .count-fill{ height:100%; background:var(--sky); transition:width .4s ease; }
+
+  .sub-list{ margin:2px 0 0 0; padding-left:0; list-style:none; display:flex; flex-direction:column; gap:6px;}
+  .sub-item{ display:flex; align-items:center; gap:8px; font-size:14px; }
+  .sub-item.done{ text-decoration: line-through; color:var(--ink-soft); }
+  .sub-check{ width:18px; height:18px; border-radius:5px; border:2px solid var(--violet); cursor:pointer; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:12px; background:#fff;}
+  .sub-check.checked{ background:var(--violet); color:#fff; }
+
+  .empty-state{ text-align:center; padding:40px 20px; color:var(--ink-soft); }
+  .empty-state .glyph{ font-size:36px; display:block; margin-bottom:8px; }
+
+  /* ---------- shop ---------- */
+  .shop-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:12px; }
+  .shop-card{
+    background:var(--parchment); border:2px solid var(--parchment-edge);
+    border-radius:14px; padding:14px; text-align:center; box-shadow:var(--shadow);
+    display:flex; flex-direction:column; gap:8px; align-items:center;
+  }
+  .shop-icon{ font-size:32px; }
+  .shop-name{ font-weight:800; font-size:14px; }
+  .shop-desc{ font-size:12px; color:var(--ink-soft); min-height:28px; }
+  .shop-cost{ font-family:'Space Mono',monospace; font-weight:700; color:var(--gold-deep); }
+
+  /* ---------- fab & modal ---------- */
+  .fab{
+    position:fixed; right:20px; bottom:24px; width:58px; height:58px; border-radius:50%;
+    background:var(--violet); color:#fff; font-size:28px; border:none; cursor:pointer;
+    box-shadow:0 8px 20px rgba(124,92,252,0.4); z-index:50;
+  }
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(70,59,99,0.35); backdrop-filter:blur(2px);
+    display:flex; align-items:flex-end; justify-content:center; z-index:100;
+  }
+  @media(min-width:640px){ .modal-overlay{ align-items:center; } }
+  .modal{
+    background:var(--parchment); width:100%; max-width:480px; border-radius:20px 20px 0 0;
+    padding:22px 20px 26px; max-height:88vh; overflow-y:auto; border:2px solid var(--border);
+  }
+  @media(min-width:640px){ .modal{ border-radius:20px; } }
+  .field{ margin-bottom:14px; }
+  .field label{ display:block; font-weight:700; font-size:13px; margin-bottom:5px; color:var(--ink); }
+  .field input, .field select, .field textarea{
+    width:100%; padding:10px 12px; border-radius:10px; border:1.5px solid var(--border);
+    font-family:'Nunito', sans-serif; font-size:14px; background:#fff; color:var(--ink);
+  }
+  .modal-actions{ display:flex; gap:10px; margin-top:16px; }
+  .modal-actions .btn{ flex:1; }
+
+  /* ---------- toasts ---------- */
+  #toast-layer{ position:fixed; top:16px; left:50%; transform:translateX(-50%); z-index:200; display:flex; flex-direction:column; gap:8px; align-items:center; }
+  .toast{
+    padding:10px 18px; border-radius:12px; font-weight:800; font-size:14px;
+    box-shadow:var(--shadow); animation: pop-in .25s ease, fade-out .4s ease 2.2s forwards;
+  }
+  .toast.gain{ background:var(--mint); color:#1F5C36; }
+  .toast.loss{ background:var(--rose); color:#fff; }
+  .toast.levelup{ background:var(--gold); color:#5A3E05; font-family:'Press Start 2P'; font-size:11px; padding:14px 20px; }
+  @keyframes pop-in{ from{ transform:scale(0.7); opacity:0;} to{ transform:scale(1); opacity:1;} }
+  @keyframes fade-out{ to{ opacity:0; transform:translateY(-6px);} }
+
+  .section-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+  .loading{ text-align:center; padding:60px 0; color:var(--ink-soft); }
+</style>
+</head>
+<body>
+
+<div id="toast-layer"></div>
+
+<div class="wrap">
+  <div class="status-window">
+    <span class="corner-tl"></span><span class="corner-br"></span>
+    <div class="avatar-badge">🧙</div>
+    <div class="status-main">
+      <div class="status-toprow">
+        <span class="level-pill pixel" id="level-pill">LV 1</span>
+        <span class="status-title">Adventurer</span>
+      </div>
+      <div class="exp-track"><div class="exp-fill" id="exp-fill" style="width:0%"></div></div>
+      <div class="exp-label mono" id="exp-label">0 / 100 EXP</div>
+    </div>
+    <div class="coin-badge"><span class="coin-icon">🪙</span><span id="coin-count">0</span></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="quests">📜 Quest Log</button>
+    <button class="tab-btn" data-tab="bosses">🐉 Boss Battles</button>
+    <button class="tab-btn" data-tab="shop">🛒 Shop</button>
+    <button class="tab-btn" data-tab="completed">✅ Completed</button>
+  </div>
+
+  <div id="content" class="loading">Loading your quest log…</div>
+</div>
+
+<button class="fab" id="fab-add" title="New quest">+</button>
+
+<!-- Add Task Modal -->
+<div class="modal-overlay" id="modal-overlay" style="display:none;">
+  <div class="modal">
+    <h2 style="margin-bottom:14px;">New Quest</h2>
+    <div class="field">
+      <label>Name</label>
+      <input type="text" id="f-name" placeholder="e.g. Clean the kitchen">
+    </div>
+    <div class="field">
+      <label>Quest Type</label>
+      <select id="f-type">
+        <option value="Standard">Standard (one-time)</option>
+        <option value="Recurring">Recurring (daily/weekly/monthly)</option>
+        <option value="Count">Count (repeat N times)</option>
+        <option value="Penalty">Penalty (deducts EXP)</option>
+        <option value="Boss">Boss (needs subtasks)</option>
+        <option value="Boss Subtask">Boss Subtask</option>
+      </select>
+    </div>
+    <div class="field" id="f-diff-wrap">
+      <label id="f-diff-label">Difficulty</label>
+      <select id="f-difficulty">
+        <option value="Trivial">Trivial</option>
+        <option value="Easy" selected>Easy</option>
+        <option value="Medium">Medium</option>
+        <option value="Hard">Hard</option>
+        <option value="Epic">Epic</option>
+      </select>
+    </div>
+    <div class="field" id="f-freq-wrap" style="display:none;">
+      <label>Frequency</label>
+      <select id="f-frequency">
+        <option value="Daily">Daily</option>
+        <option value="Weekly">Weekly</option>
+        <option value="Monthly">Monthly</option>
+      </select>
+    </div>
+    <div class="field" id="f-count-wrap" style="display:none;">
+      <label>Repeat how many times?</label>
+      <input type="number" id="f-count-target" min="1" value="5">
+    </div>
+    <div class="field" id="f-boss-wrap" style="display:none;">
+      <label>Which Boss?</label>
+      <select id="f-boss-parent"></select>
+    </div>
+    <div class="field">
+      <label>Notes (optional)</label>
+      <textarea id="f-notes" rows="2"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="modal-cancel">Cancel</button>
+      <button class="btn btn-primary" id="modal-save">Create Quest</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// CONFIGURE THIS: your deployed Cloudflare Worker URL
+// ============================================================
+const WORKER_URL = "https://questlog.YOUR-SUBDOMAIN.workers.dev";
+// ============================================================
+
+let state = { player: null, tasks: [], shop: [] };
+let activeTab = "quests";
+
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+
+async function api(path, opts = {}) {
+  const res = await fetch(WORKER_URL + path, {
+    ...opts,
+    headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.error) throw new Error(data.error || "Request failed");
+  return data;
+}
+
+function toast(message, type = "gain") {
+  const layer = $("#toast-layer");
+  const el = document.createElement("div");
+  el.className = `toast ${type}`;
+  el.textContent = message;
+  layer.appendChild(el);
+  setTimeout(() => el.remove(), 2600);
+}
+
+function expThreshold(level) { return level * 100; }
+
+function renderStatus() {
+  const p = state.player;
+  if (!p) return;
+  $("#level-pill").textContent = `LV ${p.level}`;
+  $("#coin-count").textContent = p.coins;
+  const threshold = expThreshold(p.level);
+  const pct = Math.min(100, Math.round((p.currentExp / threshold) * 100));
+  $("#exp-fill").style.width = pct + "%";
+  $("#exp-label").textContent = `${p.currentExp} / ${threshold} EXP`;
+}
+
+function applyPlayerUpdate(newPlayer, leveledUp) {
+  state.player = newPlayer;
+  renderStatus();
+  if (leveledUp) toast(`⭐ LEVEL UP! LV ${newPlayer.level} ⭐`, "levelup");
+}
+
+// ---------------- rendering ----------------
+
+function badge(cls, text) { return `<span class="badge ${cls}">${text}</span>`; }
+
+function renderQuestCard(t) {
+  const diffBadge = t.difficulty ? badge(`diff-${t.difficulty}`, t.difficulty) : "";
+  let extraBadges = "";
+  let bodyExtra = "";
+  let actions = "";
+
+  if (t.taskType === "Recurring") {
+    extraBadges += badge("freq", t.frequency || "");
+    actions = t.available
+      ? `<button class="btn btn-primary" onclick="completeTask('${t.id}')">Complete</button>`
+      : `<button class="btn btn-ghost" disabled>Already done — resets ${t.frequency?.toLowerCase()}</button>`;
+  } else if (t.taskType === "Count") {
+    const pct = Math.round((t.countProgress / t.countTarget) * 100);
+    bodyExtra = `
+      <div class="count-track">
+        <div class="count-bar"><div class="count-fill" style="width:${pct}%"></div></div>
+        <span class="mono" style="font-size:12px;">${t.countProgress}/${t.countTarget}</span>
+      </div>`;
+    actions = `<button class="btn btn-primary" onclick="incrementTask('${t.id}')">+1</button>`;
+  } else if (t.taskType === "Penalty") {
+    actions = `<button class="btn btn-danger" onclick="logPenalty('${t.id}')">Log Slip-up</button>`;
+  } else {
+    actions = `<button class="btn btn-primary" onclick="completeTask('${t.id}')">Complete</button>`;
+  }
+
+  actions += `<button class="btn btn-ghost" onclick="archiveTask('${t.id}')">✕</button>`;
+
+  const rewardBadge = t.taskType === "Penalty"
+    ? badge("coins", `${t.exp} EXP`)
+    : badge("rewards", `+${t.exp} EXP`) + (t.coins ? badge("coins", `+${t.coins} 🪙`) : "");
+
+  return `
+    <div class="quest-card type-${t.taskType} ${t.available === false ? 'unavailable' : ''}">
+      <div class="quest-top">
+        <div>
+          <div class="quest-name">${escapeHtml(t.name)}</div>
+          <div class="quest-meta">${diffBadge}${extraBadges}${rewardBadge}</div>
+        </div>
+      </div>
+      ${bodyExtra}
+      ${t.notes ? `<div style="font-size:13px;color:var(--ink-soft);">${escapeHtml(t.notes)}</div>` : ""}
+      <div class="quest-actions">${actions}</div>
+    </div>`;
+}
+
+function renderBossCard(boss, subtasks) {
+  const done = subtasks.filter(s => s.status === "Completed").length;
+  const total = subtasks.length;
+  const allDone = total > 0 && done === total;
+  const subHtml = subtasks.map(s => `
+    <li class="sub-item ${s.status === 'Completed' ? 'done' : ''}">
+      <span class="sub-check ${s.status === 'Completed' ? 'checked' : ''}" onclick="${s.status === 'Completed' ? '' : `completeSubtask('${s.id}')`}">${s.status === 'Completed' ? '✓' : ''}</span>
+      ${escapeHtml(s.name)}
+    </li>`).join("");
+
+  return `
+    <div class="quest-card type-Boss">
+      <div class="quest-top">
+        <div>
+          <div class="quest-name">🐉 ${escapeHtml(boss.name)}</div>
+          <div class="quest-meta">
+            ${boss.difficulty ? badge(`diff-${boss.difficulty}`, boss.difficulty) : ""}
+            ${badge("rewards", `+${boss.exp} EXP`)}
+            ${badge("coins", `+${boss.coins} 🪙`)}
+          </div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--ink-soft);">${done}/${total} subtasks defeated</div>
+      <ul class="sub-list">${subHtml || '<span style="font-size:13px;color:var(--ink-soft);">No subtasks yet — add some from the + button.</span>'}</ul>
+      <div class="quest-actions">
+        <button class="btn btn-gold" ${allDone ? "" : "disabled"} onclick="defeatBoss('${boss.id}')">⚔️ Defeat Boss</button>
+        <button class="btn btn-ghost" onclick="archiveTask('${boss.id}')">✕</button>
+      </div>
+    </div>`;
+}
+
+function renderShopCard(item) {
+  const canAfford = state.player.coins >= item.cost;
+  const outOfStock = item.stock === 0;
+  return `
+    <div class="shop-card">
+      <div class="shop-icon">${item.icon}</div>
+      <div class="shop-name">${escapeHtml(item.name)}</div>
+      <div class="shop-desc">${escapeHtml(item.description || "")}</div>
+      <div class="shop-cost">🪙 ${item.cost}</div>
+      <button class="btn btn-gold" ${(!canAfford || outOfStock) ? "disabled" : ""} onclick="purchase('${item.id}')">
+        ${outOfStock ? "Sold out" : "Buy"}
+      </button>
+    </div>`;
+}
+
+function escapeHtml(str) {
+  const d = document.createElement("div");
+  d.textContent = str || "";
+  return d.innerHTML;
+}
+
+function render() {
+  const content = $("#content");
+  const activeTasks = state.tasks.filter(t => t.status === "Active");
+
+  if (activeTab === "quests") {
+    const quests = activeTasks.filter(t => !["Boss", "Boss Subtask"].includes(t.taskType));
+    content.innerHTML = quests.length
+      ? `<div class="card-list">${quests.map(renderQuestCard).join("")}</div>`
+      : `<div class="empty-state"><span class="glyph">🗺️</span>No active quests. Tap + to start one!</div>`;
+  }
+
+  if (activeTab === "bosses") {
+    const bosses = activeTasks.filter(t => t.taskType === "Boss");
+    if (!bosses.length) {
+      content.innerHTML = `<div class="empty-state"><span class="glyph">🐉</span>No bosses summoned yet.</div>`;
+    } else {
+      content.innerHTML = `<div class="card-list">${bosses.map(b => {
+        const subs = state.tasks.filter(t => t.taskType === "Boss Subtask" && t.bossParentIds.includes(b.id));
+        return renderBossCard(b, subs);
+      }).join("")}</div>`;
+    }
+  }
+
+  if (activeTab === "shop") {
+    content.innerHTML = state.shop.length
+      ? `<div class="shop-grid">${state.shop.map(renderShopCard).join("")}</div>`
+      : `<div class="empty-state"><span class="glyph">🛒</span>Add items to the Shop Items database in Notion.</div>`;
+  }
+
+  if (activeTab === "completed") {
+    const completed = state.tasks.filter(t => t.status === "Completed");
+    content.innerHTML = completed.length
+      ? `<div class="card-list">${completed.map(t => `
+          <div class="quest-card" style="border-left-color:var(--mint-deep); opacity:0.75;">
+            <div class="quest-name">✅ ${escapeHtml(t.name)}</div>
+          </div>`).join("")}</div>`
+      : `<div class="empty-state"><span class="glyph">✨</span>Nothing completed yet today.</div>`;
+  }
+}
+
+// ---------------- actions ----------------
+
+async function refresh() {
+  state = await api("/api/state");
+  renderStatus();
+  render();
+}
+
+window.completeTask = async (id) => {
+  try {
+    const res = await api("/api/tasks/complete", { method: "POST", body: JSON.stringify({ taskId: id }) });
+    toast(`+${res.expGained} EXP, +${res.coinsGained} 🪙`, "gain");
+    applyPlayerUpdate(res.player, res.leveledUp);
+    await refresh();
+  } catch (e) { toast(e.message, "loss"); }
+};
+
+window.incrementTask = async (id) => {
+  try {
+    const res = await api("/api/tasks/increment", { method: "POST", body: JSON.stringify({ taskId: id }) });
+    if (res.reachedTarget) {
+      toast(`Target reached! +${res.expGained} EXP, +${res.coinsGained} 🪙`, "gain");
+      applyPlayerUpdate(res.player, res.leveledUp);
+    }
+    await refresh();
+  } catch (e) { toast(e.message, "loss"); }
+};
+
+window.logPenalty = async (id) => {
+  try {
+    const res = await api("/api/tasks/penalty", { method: "POST", body: JSON.stringify({ taskId: id }) });
+    toast(`${res.expLost} EXP`, "loss");
+    state.player = res.player;
+    renderStatus();
+  } catch (e) { toast(e.message, "loss"); }
+};
+
+window.archiveTask = async (id) => {
+  try {
+    await api("/api/tasks/archive", { method: "POST", body: JSON.stringify({ taskId: id }) });
+    await refresh();
+  } catch (e) { toast(e.message, "loss"); }
+};
+
+window.completeSubtask = async (id) => {
+  try {
+    await api("/api/boss/subtask-complete", { method: "POST", body: JSON.stringify({ taskId: id }) });
+    await refresh();
+  } catch (e) { toast(e.message, "loss"); }
+};
+
+window.defeatBoss = async (id) => {
+  try {
+    const res = await api("/api/boss/defeat", { method: "POST", body: JSON.stringify({ bossId: id }) });
+    toast(`⚔️ Boss defeated! +${res.expGained} EXP, +${res.coinsGained} 🪙`, "gain");
+    applyPlayerUpdate(res.player, res.leveledUp);
+    await refresh();
+  } catch (e) { toast(e.message, "loss"); }
+};
+
+window.purchase = async (id) => {
+  try {
+    const res = await api("/api/shop/purchase", { method: "POST", body: JSON.stringify({ itemId: id }) });
+    toast(`Purchased ${res.purchased}!`, "gain");
+    state.player = res.player;
+    renderStatus();
+    await refresh();
+  } catch (e) { toast(e.message, "loss"); }
+};
+
+// ---------------- tabs ----------------
+
+$$(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    $$(".tab-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    activeTab = btn.dataset.tab;
+    render();
+  });
+});
+
+// ---------------- modal ----------------
+
+function updateModalFields() {
+  const type = $("#f-type").value;
+  $("#f-diff-wrap").style.display = (type === "Boss Subtask") ? "none" : "block";
+  $("#f-diff-label").textContent = type === "Penalty" ? "Severity (Trivial=Minor, Easy=Moderate, Hard=Severe)" : "Difficulty";
+  $("#f-freq-wrap").style.display = (type === "Recurring") ? "block" : "none";
+  $("#f-count-wrap").style.display = (type === "Count") ? "block" : "none";
+  $("#f-boss-wrap").style.display = (type === "Boss Subtask") ? "block" : "none";
+
+  if (type === "Boss Subtask") {
+    const bossOptions = state.tasks.filter(t => t.taskType === "Boss" && t.status === "Active");
+    $("#f-boss-parent").innerHTML = bossOptions.map(b => `<option value="${b.id}">${escapeHtml(b.name)}</option>`).join("");
+  }
+}
+
+$("#f-type").addEventListener("change", updateModalFields);
+
+$("#fab-add").addEventListener("click", () => {
+  $("#modal-overlay").style.display = "flex";
+  updateModalFields();
+});
+$("#modal-cancel").addEventListener("click", () => { $("#modal-overlay").style.display = "none"; });
+$("#modal-overlay").addEventListener("click", (e) => { if (e.target.id === "modal-overlay") $("#modal-overlay").style.display = "none"; });
+
+$("#modal-save").addEventListener("click", async () => {
+  const name = $("#f-name").value.trim();
+  const taskType = $("#f-type").value;
+  if (!name) { toast("Name your quest first", "loss"); return; }
+
+  // Map difficulty selector to penalty severity when type is Penalty
+  const diffToSeverity = { Trivial: "Minor", Easy: "Moderate", Medium: "Moderate", Hard: "Severe", Epic: "Severe" };
+  const difficulty = taskType === "Penalty" ? diffToSeverity[$("#f-difficulty").value] : $("#f-difficulty").value;
+
+  const payload = {
+    name,
+    taskType,
+    difficulty: taskType === "Boss Subtask" ? null : difficulty,
+    frequency: taskType === "Recurring" ? $("#f-frequency").value : null,
+    countTarget: taskType === "Count" ? parseInt($("#f-count-target").value, 10) : null,
+    bossParentId: taskType === "Boss Subtask" ? $("#f-boss-parent").value : null,
+    notes: $("#f-notes").value.trim(),
+  };
+
+  try {
+    await api("/api/tasks", { method: "POST", body: JSON.stringify(payload) });
+    $("#modal-overlay").style.display = "none";
+    $("#f-name").value = ""; $("#f-notes").value = "";
+    toast("Quest added!", "gain");
+    await refresh();
+  } catch (e) { toast(e.message, "loss"); }
+});
+
+// ---------------- init ----------------
+
+refresh().catch(e => {
+  $("#content").innerHTML = `<div class="empty-state"><span class="glyph">⚠️</span>Couldn't reach the Worker.<br><span class="mono" style="font-size:12px;">${e.message}</span><br>Check WORKER_URL at the top of the script.</div>`;
+});
+</script>
+</body>
+</html>
